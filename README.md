@@ -692,17 +692,6 @@ If you find this project useful, please consider giving it a star! ⭐
 
 </div>
 
----
-
-## 📸 Gallery
-
-> Add photos of your actual project here
-
-### Hardware Assembly
-![Hardware Setup](images/hardware_setup.jpg)
-
----
-
 **Happy Growing! 🌿**
 
 </div>
