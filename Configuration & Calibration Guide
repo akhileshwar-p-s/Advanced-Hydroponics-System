@@ -1,0 +1,536 @@
+# Configuration & Calibration Guide
+
+## 📋 Hardware Setup
+
+### Component List
+
+| Component | Quantity | Specifications |
+|-----------|----------|----------------|
+| ESP32 DevKit v1 | 1 | WiFi enabled |
+| pH Sensor (Analog) | 1 | 0-14 pH range |
+| EC/TDS Sensor | 1 | 0-5000 μS/cm |
+| DS18B20 Temperature Sensor | 1 | Waterproof version |
+| Water Level Sensor | 1 | Analog output |
+| Peristaltic Pumps | 4 | 12V, 100ml/min |
+| 4-Channel Relay Module | 1 | 5V trigger, 10A |
+| 12V Power Supply | 1 | 3A minimum |
+| 5V Regulator (LM7805) | 1 | For ESP32 |
+| Jumper Wires | - | Male-Female, Female-Female |
+| Reservoir Tank | 1 | 20-50 liters |
+| Solution Bottles | 4 | For Nutrient A, B, pH Up, pH Down |
+
+---
+
+## 🔌 Wiring Diagram
+
+### ESP32 Connections
+
+```
+ESP32 Pin  →  Component
+---------------------------------
+GPIO 34    →  pH Sensor (Analog Out)
+GPIO 35    →  EC Sensor (Analog Out)
+GPIO 4     →  DS18B20 (Data)
+GPIO 33    →  Water Level Sensor (Analog Out)
+
+GPIO 25    →  Relay 1 (Nutrient A Pump)
+GPIO 26    →  Relay 2 (Nutrient B Pump)
+GPIO 27    →  Relay 3 (pH Up Pump)
+GPIO 14    →  Relay 4 (pH Down Pump)
+
+GPIO 2     →  System LED
+GPIO 15    →  Alert LED
+
+3.3V       →  Sensor Power (via voltage divider if needed)
+GND        →  Common Ground
+```
+
+### Power Distribution
+
+```
+12V Supply
+├── Relay Module (VCC)
+├── Peristaltic Pumps (4x)
+└── LM7805 Regulator → ESP32 (5V/VIN)
+
+All GNDs connected together
+```
+
+### Sensor Wiring Details
+
+**pH Sensor:**
+- Red: +5V
+- Black: GND
+- Blue: Signal → ESP32 GPIO34 (via voltage divider 5V→3.3V)
+
+**EC Sensor:**
+- Red: +5V
+- Black: GND
+- Yellow: Signal → ESP32 GPIO35
+
+**DS18B20:**
+- Red: +3.3V
+- Black: GND
+- Yellow: Data → ESP32 GPIO4 (with 4.7kΩ pull-up resistor)
+
+**Water Level Sensor:**
+- Red: +5V
+- Black: GND
+- Signal: → ESP32 GPIO33
+
+---
+
+## ⚙️ Software Configuration
+
+### 1. Arduino IDE Setup
+
+#### Install ESP32 Board
+1. Open Arduino IDE
+2. Go to `File → Preferences`
+3. Add to "Additional Board Manager URLs":
+   ```
+   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   ```
+4. Go to `Tools → Board → Boards Manager`
+5. Search "ESP32" and install
+
+#### Install Required Libraries
+```
+Tools → Manage Libraries → Search and Install:
+- Blynk (v1.1.0 or later)
+- OneWire
+- DallasTemperature
+```
+
+### 2. Blynk Setup
+
+#### Create New Template
+1. Go to [Blynk Console](https://blynk.cloud/)
+2. Click "Create Template"
+3. Name: "Hydroponics System"
+4. Hardware: ESP32
+5. Connection: WiFi
+
+#### Configure Datastreams
+
+| Virtual Pin | Name | Type | Min | Max | Default |
+|-------------|------|------|-----|-----|---------|
+| V0 | pH Value | Double | 0 | 14 | 7.0 |
+| V1 | EC Value | Integer | 0 | 5000 | 1500 |
+| V2 | Temperature | Double | 0 | 50 | 25.0 |
+| V3 | Water Level | Integer | 0 | 100 | 100 |
+| V4 | Pump A Control | Integer | 0 | 1 | 0 |
+| V5 | Pump B Control | Integer | 0 | 1 | 0 |
+| V6 | Pump pH Up | Integer | 0 | 1 | 0 |
+| V7 | Pump pH Down | Integer | 0 | 1 | 0 |
+| V8 | System Status | String | - | - | "Active" |
+| V9 | Terminal | String | - | - | - |
+
+#### Add Widgets
+
+**Web Dashboard:**
+1. **Gauge** (V0): pH Value (0-14)
+2. **Gauge** (V1): EC Value (0-5000)
+3. **Gauge** (V2): Temperature (0-50°C)
+4. **Level** (V3): Water Level (0-100%)
+5. **Chart**: Historical pH, EC, Temp
+6. **Button** (V4-V7): Manual pump controls
+7. **Switch** (V8): System ON/OFF
+8. **Terminal** (V9): Status messages
+
+**Mobile App:** Similar layout optimized for phone
+
+#### Setup Events (for Notifications)
+
+1. **Event: water_low**
+   - Name: Low Water Level
+   - Message: "Water level below 20%"
+   - Notification: Enabled
+
+2. **Event: ec_high**
+   - Name: High EC
+   - Message: "EC exceeds target range"
+   - Notification: Enabled
+
+---
+
+## 🔬 Sensor Calibration
+
+### pH Sensor Calibration
+
+#### Equipment Needed:
+- pH 4.0 buffer solution
+- pH 7.0 buffer solution
+- pH 10.0 buffer solution
+
+#### Calibration Procedure:
+
+1. **Prepare pH 7.0 (Neutral Point)**
+   ```cpp
+   // Rinse sensor with distilled water
+   // Place in pH 7.0 buffer
+   // Read voltage: should be ~1500mV
+   // Adjust PH_NEUTRAL_VOLTAGE in code
+   ```
+
+2. **Calibrate pH 4.0 (Acid Point)**
+   ```cpp
+   // Rinse sensor
+   // Place in pH 4.0 buffer
+   // Read voltage: typically ~2000mV
+   // Adjust PH_ACID_VOLTAGE in code
+   ```
+
+3. **Verify with pH 10.0**
+   ```cpp
+   // Rinse sensor
+   // Place in pH 10.0 buffer
+   // Verify reading is accurate
+   ```
+
+#### Calibration Code Snippet:
+```cpp
+// Update these values in your main code
+#define PH_NEUTRAL_VOLTAGE 1500  // mV at pH 7.0 (measured)
+#define PH_ACID_VOLTAGE 2000     // mV at pH 4.0 (measured)
+
+// Slope calculation
+float slope = (PH_ACID_VOLTAGE - PH_NEUTRAL_VOLTAGE) / 3.0;
+```
+
+### EC Sensor Calibration
+
+#### Equipment Needed:
+- 1413 μS/cm calibration solution
+- Distilled water
+
+#### Calibration Procedure:
+
+1. **Zero Calibration (Distilled Water)**
+   ```cpp
+   // Place sensor in distilled water
+   // Should read ~0 μS/cm
+   // Note any offset
+   ```
+
+2. **Point Calibration (1413 μS/cm)**
+   ```cpp
+   // Rinse sensor
+   // Place in 1413 μS/cm solution
+   // Measure voltage output
+   // Calculate calibration factor:
+   float EC_CALIBRATION_FACTOR = 1413.0 / measuredValue;
+   ```
+
+3. **Update Code**
+   ```cpp
+   #define EC_CALIBRATION_FACTOR 1.15  // Your calculated value
+   ```
+
+### Temperature Sensor Calibration
+
+Usually pre-calibrated, but verify:
+```cpp
+// Place in ice water: should read ~0°C
+// Place in room temp water: should match thermometer
+// DS18B20 is typically accurate ±0.5°C
+```
+
+### Water Level Sensor Calibration
+
+```cpp
+// Empty tank: note ADC value (should be ~0)
+// Full tank: note ADC value (should be ~4095)
+// Update map function:
+int level = map(sensorValue, emptyValue, fullValue, 0, 100);
+```
+
+---
+
+## 🎯 Target Range Configuration
+
+### Optimal Ranges for Different Crops
+
+#### Lettuce / Leafy Greens
+```cpp
+#define TARGET_PH 5.8
+#define PH_TOLERANCE 0.3
+#define TARGET_EC 1200  // μS/cm
+#define EC_TOLERANCE 100
+```
+
+#### Tomatoes
+```cpp
+#define TARGET_PH 6.0
+#define PH_TOLERANCE 0.2
+#define TARGET_EC 2000  // μS/cm
+#define EC_TOLERANCE 150
+```
+
+#### Herbs (Basil, Mint)
+```cpp
+#define TARGET_PH 6.2
+#define PH_TOLERANCE 0.3
+#define TARGET_EC 1600  // μS/cm
+#define EC_TOLERANCE 100
+```
+
+#### Strawberries
+```cpp
+#define TARGET_PH 6.0
+#define PH_TOLERANCE 0.2
+#define TARGET_EC 1800  // μS/cm
+#define EC_TOLERANCE 100
+```
+
+---
+
+## ⏱️ Timing Configuration
+
+### Adjust Based on Your Setup
+
+```cpp
+// How often to read sensors (milliseconds)
+#define SENSOR_READ_INTERVAL 5000     // 5 seconds (can increase to 10000)
+
+// How often to update Blynk dashboard
+#define BLYNK_UPDATE_INTERVAL 10000   // 10 seconds (max for free tier)
+
+// Wait time between pump activations
+#define PUMP_COOLDOWN 60000           // 60 seconds (increase if over-dosing)
+
+// Pump activation duration
+#define PUMP_DOSE_TIME 1000           // 1 second (adjust based on pump flow rate)
+```
+
+### Dosing Time Calculation
+
+```
+Pump Flow Rate: 100 ml/min
+Tank Volume: 20 liters
+Desired dose: 10 ml
+
+Dose Time = (10 ml / 100 ml/min) × 60000 ms/min = 6000 ms
+
+Update: #define PUMP_DOSE_TIME 6000
+```
+
+---
+
+## 🧪 Testing Procedure
+
+### Initial System Test
+
+#### 1. Power-Up Test
+```
+□ Connect power supply
+□ ESP32 blue LED lights up
+□ System LED blinks
+□ No smoke or burning smell
+```
+
+#### 2. WiFi Connection Test
+```
+□ Open Serial Monitor (115200 baud)
+□ Should see "Connecting to WiFi..."
+□ Should see "Connected to Blynk!"
+□ Blynk dashboard shows "Device Online"
+```
+
+#### 3. Sensor Test
+```
+□ pH sensor shows reasonable value (5-8)
+□ EC sensor shows value (0-3000)
+□ Temperature shows room temp (~20-30°C)
+□ Water level shows percentage
+```
+
+#### 4. Pump Test (Manual Mode)
+```
+□ Type "manual" in Blynk terminal
+□ Click Pump A button - should activate for 1 second
+□ Click Pump B button - should activate
+□ Click pH Up button - should activate
+□ Click pH Down button - should activate
+```
+
+#### 5. Automatic Control Test
+```
+□ Fill reservoir with water
+□ Add pH sensor to water
+□ Manually adjust pH away from target
+□ System should auto-correct within 1-2 minutes
+□ Check EC adjustment similarly
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### WiFi Not Connecting
+```
+Check:
+- SSID and password correct
+- 2.4GHz network (ESP32 doesn't support 5GHz)
+- Router not too far away
+- No special characters in password
+```
+
+#### Sensors Reading Zero
+```
+Check:
+- Power connections (3.3V/5V and GND)
+- Signal wire connected to correct GPIO
+- Sensor immersed in liquid (for pH/EC)
+- No loose connections
+```
+
+#### Pumps Not Activating
+```
+Check:
+- Relay connections (VCC, GND, Signal)
+- Relay power (12V supply connected)
+- Relay LED lights up when activated
+- Pump power connections
+- Tubing not kinked
+```
+
+#### pH/EC Readings Unstable
+```
+Solutions:
+- Calibrate sensors properly
+- Add delays between readings
+- Check for air bubbles on sensor
+- Ensure proper submersion
+- Clean sensor probes
+```
+
+#### Blynk Not Updating
+```
+Check:
+- Device showing online in Blynk
+- Correct Virtual Pin assignments
+- Not exceeding free tier limits (100 req/min)
+- Internet connection stable
+```
+
+---
+
+## 📊 Performance Tuning
+
+### PID Controller (Advanced)
+
+For more precise control, implement PID:
+
+```cpp
+// PID Constants
+double Kp = 2.0;  // Proportional
+double Ki = 0.5;  // Integral
+double Kd = 0.1;  // Derivative
+
+double lastError = 0;
+double integral = 0;
+
+void controlPH_PID() {
+  double error = TARGET_PH - phValue;
+  integral += error;
+  double derivative = error - lastError;
+  
+  double output = Kp * error + Ki * integral + Kd * derivative;
+  
+  if (output > 0.5) {
+    activatePump(PUMP_PH_UP, PUMP_DOSE_TIME);
+  } else if (output < -0.5) {
+    activatePump(PUMP_PH_DOWN, PUMP_DOSE_TIME);
+  }
+  
+  lastError = error;
+}
+```
+
+### Optimize Pump Dosing
+
+```cpp
+// Adjust dose based on error magnitude
+int calculateDoseTime(float error) {
+  if (abs(error) > 1.0) {
+    return PUMP_DOSE_TIME * 2;  // Large correction
+  } else if (abs(error) > 0.5) {
+    return PUMP_DOSE_TIME;      // Normal correction
+  } else {
+    return PUMP_DOSE_TIME / 2;  // Small correction
+  }
+}
+```
+
+---
+
+## 💾 Data Logging
+
+### Local SD Card Logging (Optional)
+
+Add SD card module for offline data storage:
+
+```cpp
+#include <SD.h>
+
+void logToSD() {
+  File dataFile = SD.open("hydro_log.csv", FILE_APPEND);
+  if (dataFile) {
+    dataFile.print(millis());
+    dataFile.print(",");
+    dataFile.print(phValue);
+    dataFile.print(",");
+    dataFile.print(ecValue);
+    dataFile.print(",");
+    dataFile.println(waterTemp);
+    dataFile.close();
+  }
+}
+```
+
+---
+
+## 🔒 Safety Features
+
+### Implement Fail-Safes
+
+```cpp
+// Maximum pump activations per hour
+#define MAX_PUMP_ACTIVATIONS 30
+
+int pumpActivationCount = 0;
+unsigned long pumpCounterReset = 0;
+
+void safetyCheck() {
+  // Reset counter every hour
+  if (millis() - pumpCounterReset > 3600000) {
+    pumpActivationCount = 0;
+    pumpCounterReset = millis();
+  }
+  
+  // Disable if too many activations
+  if (pumpActivationCount > MAX_PUMP_ACTIVATIONS) {
+    systemActive = false;
+    Blynk.logEvent("pump_limit", "Safety: Pump limit exceeded");
+  }
+}
+```
+
+---
+
+## 📱 Mobile App Configuration
+
+### Notification Settings
+
+1. Install Blynk app on phone
+2. Login with same account
+3. Enable notifications for events
+4. Configure notification sound
+5. Set "Do Not Disturb" schedule if needed
+
+---
+
+This configuration should get your system running optimally!
